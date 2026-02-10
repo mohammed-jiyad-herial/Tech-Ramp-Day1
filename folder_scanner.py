@@ -17,8 +17,14 @@ def format_size(size_bytes):
     return f"{size_bytes:.2f} PB"
 
 
-def scan_folder(folder_path):
-    """Scan all files in the given folder and return summary data."""
+def scan_folder(folder_path, extension=None):
+    """Scan files in the given folder and return summary data.
+
+    Args:
+        folder_path: Path to the directory to scan.
+        extension: Optional file extension filter (e.g. ".js", ".txt").
+                   Only files matching this extension will be processed.
+    """
     if not os.path.isdir(folder_path):
         print(f"Error: '{folder_path}' is not a valid directory.", file=sys.stderr)
         sys.exit(1)
@@ -29,9 +35,21 @@ def scan_folder(folder_path):
     largest_size = 0
     file_types = defaultdict(lambda: {"count": 0, "size": 0})
 
+    # Normalize the extension filter so ".txt" and "txt" both work
+    if extension is not None:
+        if not extension.startswith("."):
+            extension = "." + extension
+        extension = extension.lower()
+
     for entry in os.scandir(folder_path):
         if not entry.is_file():
             continue
+
+        # Skip files that don't match the requested extension
+        if extension is not None:
+            file_ext = os.path.splitext(entry.name)[1].lower()
+            if file_ext != extension:
+                continue
 
         total_files += 1
         size = entry.stat().st_size
@@ -48,6 +66,7 @@ def scan_folder(folder_path):
 
     return {
         "folder": os.path.abspath(folder_path),
+        "extension_filter": extension,
         "total_files": total_files,
         "total_size": total_size,
         "largest_file": largest_file,
@@ -63,6 +82,8 @@ def build_report(data):
     lines.append("           FOLDER SCAN REPORT")
     lines.append("=" * 60)
     lines.append(f"Folder:       {data['folder']}")
+    if data.get("extension_filter"):
+        lines.append(f"Filter:       *{data['extension_filter']} files only")
     lines.append(f"Scanned at:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append("-" * 60)
     lines.append(f"Total files:  {data['total_files']}")
@@ -103,9 +124,15 @@ def main():
         default="folder_report.txt",
         help="Output report file path (default: folder_report.txt)",
     )
+    parser.add_argument(
+        "-e",
+        "--extension",
+        default=None,
+        help="Filter by file extension (e.g. .js, .txt). Only matching files are processed.",
+    )
     args = parser.parse_args()
 
-    data = scan_folder(args.folder)
+    data = scan_folder(args.folder, extension=args.extension)
     report = build_report(data)
 
     print(report)
